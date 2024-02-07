@@ -1,0 +1,62 @@
+(*assumes private as protected by Solid-OIDC*)
+free c:channel [private] .
+free d:channel [private].
+free a:channel [private] .
+free pub : channel .
+
+type name.
+
+free OK:bitstring.
+free notOK:bitstring.
+free clientName :name [private] . (* the client's name which is authorized to perform operations*)
+
+
+event clientSendName . (* event emitted if client sends name and op *)
+event clientReceiveResponse . (* event emitted after client receives a response  *)
+
+event ProxyNotOK . (* event emitted if organization responds NOT OK to proxy  *)
+event ProxyOK . (* event emitted if organization responds OK to proxy  *)
+
+event orgAsked . (* event emitted when org receives a message to check a name  *)
+
+event CheckName . (* event emitted if affiliate accepts org name of proxy  *)
+
+
+
+query event(CheckName) ==> event(ProxyOK) &&  event(orgAsked). (* Whenever affiliate accepts a name, it must come from an approved Proxy request and organization was asked before  *)
+query event(clientReceiveResponse) ==> event(clientSendName) . (* Whenever client sends a request, it will receive a response *)
+
+query attacker(clientName) . (* check if attacker gets to known name aka what name affiliate receives  *)
+
+(*===Client that wants to perform an operation op===*)
+let client(clientname : name, op : bitstring) = 
+  event clientSendName ;
+  out(c, (clientname, op));
+  in(c, resp : bitstring);
+  event clientReceiveResponse . 
+
+(*===Proxy who has to forward operation op===*)
+let proxy(orgName : name) =
+  in(c, (xname : name , xop : bitstring)) ;
+  out(d, (xname , xop )) ;
+  in(d, resp: bitstring) ;
+  if resp = OK then (event ProxyOK; out(a, (orgName, xop)); in(a, aresp:bitstring); out(c, aresp) ) else ( event ProxyNotOK; out(c, notOK)) .
+
+(*===Organization to look up if client with name is allowed===*)
+let organization(okName : name, okOp : bitstring) =
+  in(d, (yname : name , yop : bitstring)) ;
+  event orgAsked ;
+  if yname = okName then (if yop = okOp then ( out(d,OK)) ) else out(d, notOK) .
+
+(*===Affiliate to whom the operation is fowarded to===*)
+let affiliate(orgName : name)  =
+  in(a, (zname : name, zop : bitstring)) ; (*logic to check if proxy may use op...*)
+  if zname = orgName then ( event CheckName ;  out(a,OK)) else out(a, notOK) ;
+  out(pub, zname) . (* publish received name to check if affiliate received secret client name*)
+
+process
+  new op:bitstring; (*the operation to be applied to the affiliate*)
+  new orgName : name; (* the organization's name aka the name the proxy uses*)
+  !(client(clientName, op) | proxy(orgName) | organization(clientName , op) | affiliate(orgName))
+
+
