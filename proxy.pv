@@ -1,14 +1,17 @@
 (*assumes private as protected by Solid-OIDC*)
-free c:channel [private] .
-free d:channel [private].
-free a:channel [private] .
-free pub : channel .
+free c:channel [private] . (* out client, in proxy  *)
+free c2 : channel [private] . (* in client, out proxy  *)
+free d:channel [private] .  (* out proxy, in org  *)
+free e:channel [private] .  (* in  proxy, out org  *)
+free a:channel [private] .  (* out proxy, in affiliate  *)
+free pub : channel .  (* public channel  *)
 
 type name.
 
 free OK:bitstring.
 free notOK:bitstring.
-free clientName :name [private] . (* the client's name which is authorized to perform operations*)
+free clientName :name [private] . (* a client name which is authorized to perform operations*)
+free clientName2 :name [private] . (* a client name which is NOT authorized to perform any operation *)
 
 
 event clientSendName . (* event emitted if client sends name and op *)
@@ -22,31 +25,39 @@ event orgAsked . (* event emitted when org receives a message to check a name  *
 event CheckName . (* event emitted if affiliate accepts org name of proxy  *)
 
 
+(* Goal 1: When client send a message to affiliate via the proxy, the org has to have seen the message before forwarding  *)
+query event(CheckName) ==> event(ProxyOK) &&  event(orgAsked).
 
-query event(CheckName) ==> event(ProxyOK) &&  event(orgAsked). (* Whenever affiliate accepts a name, it must come from an approved Proxy request and organization was asked before  *)
-query event(clientReceiveResponse) ==> event(clientSendName) . (* Whenever client sends a request, it will receive a response *)
+(* Goal 2: Whenever client sends a request, it will receive a response *)
+query event(clientReceiveResponse) ==> event(clientSendName) . 
 
-query attacker(clientName) . (* check if attacker gets to known name aka what name affiliate receives  *)
+(* Goal 3: If org approves a message, the message has to be forwarded to affiliate (cf. Goal 1) , else not *)
+query event(ProxyNotOK) ==> event(orgAsked) . 
+
+(* Goal 4: The affiliat will never get to known the client's name from the proxy  *)
+query attacker(clientName) .
+
+
 
 (*===Client that wants to perform an operation op===*)
 let client(clientname : name, op : bitstring) = 
   event clientSendName ;
   out(c, (clientname, op));
-  in(c, resp : bitstring);
+  in(c2, resp : bitstring);
   event clientReceiveResponse . 
 
 (*===Proxy who has to forward operation op===*)
 let proxy(orgName : name) =
   in(c, (xname : name , xop : bitstring)) ;
   out(d, (xname , xop )) ;
-  in(d, resp: bitstring) ;
-  if resp = OK then (event ProxyOK; out(a, (orgName, xop)); in(a, aresp:bitstring); out(c, aresp) ) else ( event ProxyNotOK; out(c, notOK)) .
+  in(e, resp: bitstring) ;
+  if resp = OK then (event ProxyOK; out(a, (orgName, xop)); in(a, aresp:bitstring); out(c2, aresp) ) else ( event ProxyNotOK; out(c2, notOK)) .
 
 (*===Organization to look up if client with name is allowed===*)
 let organization(okName : name, okOp : bitstring) =
   in(d, (yname : name , yop : bitstring)) ;
   event orgAsked ;
-  if yname = okName then (if yop = okOp then ( out(d,OK)) ) else out(d, notOK) .
+  if yname = okName then (if yop = okOp then ( out(e,OK)) else out(e, notOK) ) else out(e, notOK) .
 
 (*===Affiliate to whom the operation is fowarded to===*)
 let affiliate(orgName : name)  =
@@ -57,6 +68,5 @@ let affiliate(orgName : name)  =
 process
   new op:bitstring; (*the operation to be applied to the affiliate*)
   new orgName : name; (* the organization's name aka the name the proxy uses*)
-  !(client(clientName, op) | proxy(orgName) | organization(clientName , op) | affiliate(orgName))
-
-
+  (* client is initalized with its name and the operation, proxy know the organization name, organization knows which client is allowed to perform what operation, the affiliation knows the organization  *)
+  !(client(clientName2, op) | proxy(orgName) | organization(clientName , op) | affiliate(orgName))
