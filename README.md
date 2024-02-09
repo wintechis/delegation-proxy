@@ -1,7 +1,6 @@
 # delegation-proxy
 
-
-1. Wenn Client einen (picalc-)name an Affiliate schickt, muss org den Namen vorher gesehen haben (Logging)
-2. Der Client bekommt immer eine Antwort vom Proxy nach einer Anfrage an den Proxy
-3. Wenn org zu einem positiven Ergebnis kommt, muss der name beim Affiliate landen, sonst nicht
-4. idClient kommt niemals zum Affilaite.
+Goals of the SDS-D:
+1. When client sends a message to affiliate via the proxy, the org has to have seen the message before forwarding (Logging)
+2. Whenever client sends a request, it will receive a response
+3. The affiliate will never get to known a client's name from the proxy regardless of whether the name is valid or invalid
