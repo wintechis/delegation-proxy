@@ -10,30 +10,30 @@ type name.
 
 free OK: bitstring.
 free notOK: bitstring.
-free clientName: name [private] . (* a client name which is authorized to perform operations*)
-free clientName2: name [private] . (* a client name which is NOT authorized to perform any operation *)
+free validName: name [private] . (* a client name which is authorized to perform operations*)
+free invalidName: name [private] . (* a client name which is NOT authorized to perform any operation *)
 
 
 event clientSendName . (* event emitted if client sends name and op *)
 event clientReceiveResponse . (* event emitted after client receives a response  *)
 
-event ProxyNotOK . (* event emitted if organization responds NOT OK to proxy  *)
-event ProxyOK . (* event emitted if organization responds OK to proxy  *)
+event proxyNotOK . (* event emitted if organization responds NOT OK to proxy  *)
+event proxyOK . (* event emitted if organization responds OK to proxy  *)
 
 event orgAsked . (* event emitted when org receives a message to check a name  *)
 
-event CheckName . (* event emitted if affiliate accepts org name of proxy  *)
+event affReceivesMsg . (* event emitted if affiliate accepts org name of proxy  *)
 
 
-(* Goal 1: When client send a message to affiliate via the proxy, the org has to have seen the message before forwarding  *)
-query event(CheckName) ==> (event(ProxyOK) ==> event(orgAsked)).
+(* Goal 1: When client sends a message to affiliate via the proxy, the org has to have seen the message before forwarding *)
+query event(affReceivesMsg) ==> (event(proxyOK) ==> event(orgAsked)).
 
 (* Goal 2: Whenever client sends a request, it will receive a response *)
 query event(clientReceiveResponse) ==> event(clientSendName) . 
 
-(* Goal 4: The affiliate will never get to known the client's name from the proxy  *)
-query attacker(clientName) .
-query attacker(clientName2) .
+(* Goal 3: The affiliate will never get to known a client's name from the proxy regardless of whether the name is valid or invalid *)
+query attacker(validName) .
+query attacker(invalidName) .
 
 (*===Client that wants to perform an operation op===*)
 let client(clientname : name, op : bitstring) = 
@@ -47,7 +47,7 @@ let proxy(orgName : name) =
   in(c, (xname : name , xop : bitstring)) ;
   out(d, (xname , xop )) ;
   in(e, resp: bitstring) ;
-  if resp = OK then (event ProxyOK; out(a, (orgName, xop)); in(a, aresp:bitstring); out(c2, aresp) ) else ( event ProxyNotOK; out(c2, notOK)) .
+  if resp = OK then (event proxyOK; out(a, (orgName, xop)); in(a, aresp:bitstring); out(c2, aresp) ) else ( event proxyNotOK; out(c2, notOK)) .
 
 (*===Organization to look up if client with name is allowed===*)
 let organization(okName : name, okOp : bitstring) =
@@ -56,13 +56,13 @@ let organization(okName : name, okOp : bitstring) =
   if yname = okName then (if yop = okOp then ( out(e,OK)) else out(e, notOK) ) else out(e, notOK) .
 
 (*===Affiliate to whom the operation is fowarded to===*)
-let affiliate(orgName : name)  =
-  in(a, (zname : name, zop : bitstring)) ; (*logic to check if proxy may use op...*)
-  if zname = orgName then ( event CheckName ;  out(a,OK)) else out(a, notOK) ;
+let affiliate(orgName: name, op: bitstring)  =
+  in(a, (zname : name, zop : bitstring)) ;
+  if zname = orgName then ( if zop = op then ( event affReceivesMsg ;  out(a,OK)) else out(a, notOK) ) else out(a, notOK) ;
   out(pub, zname) . (* publish received name to check if affiliate received secret client name*)
 
 process
-  new op:bitstring; (*the operation to be applied to the affiliate*)
-  new orgName : name; (* the organization's name aka the name the proxy uses*)
-  (* client is initalized with its name and the operation, proxy know the organization name, organization knows which client is allowed to perform what operation, the affiliation knows the organization  *)
-  !(client(clientName2, op) | client(clientName, op) | proxy(orgName) | organization(clientName , op) | affiliate(orgName))
+  new op: bitstring; (*the operation to be applied to the affiliate*)
+  new orgName: name; (* the organization's name aka the name the proxy uses*)
+  (* one client is initalized with a valid name and the operation, one client with an invalid name, proxy know the organization name, organization knows which client is allowed to perform what operation, the affiliation knows the organization  *)
+  !(client(invalidName, op) | client(validName, op) | proxy(orgName) | organization(validName , op) | affiliate(orgName, op))
