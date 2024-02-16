@@ -1,0 +1,172 @@
+===========Proof of our analysed sdsd process, output of ProVerif===========
+
+
+Process 0 (that is, the initial process):
+{1}new op: bitstring;
+{2}new orgName: name;
+{3}!
+(
+    {4}let clientname: name = invalidName in
+    {5}let op_1: bitstring = op in
+    {6}event clientSendName;
+    {7}out(cout, (clientname,op_1));
+    {8}in(cin, resp: bitstring);
+    {9}event clientReceiveResponse
+) | (
+    {10}let clientname_1: name = validName in
+    {11}let op_2: bitstring = op in
+    {12}event clientSendName;
+    {13}out(cout, (clientname_1,op_2));
+    {14}in(cin, resp_1: bitstring);
+    {15}event clientReceiveResponse
+) | (
+    {16}let orgName_1: name = orgName in
+    {17}in(cout, (xname: name,xop: bitstring));
+    {18}out(orgin, xname);
+    {19}in(orgout, (polName: name,polOp: bitstring));
+    {20}if (xname = polName) then
+    (
+        {21}if (xop = polOp) then
+            {22}event sdsdOK;
+            {23}out(affin, (orgName_1,xop));
+            {24}in(affout, aresp: bitstring);
+            {25}out(cin, aresp)
+        else
+            {26}event sdsdNotOK;
+            {27}out(cin, notOK)
+    )
+    else
+        {28}event sdsdNotOK;
+        {29}out(cin, notOK)
+) | (
+    {30}let okName: name = validName in
+    {31}let okOp: bitstring = op in
+    {32}in(orgin, yname: name);
+    {33}event orgAsked;
+    {34}if (yname = okName) then
+        {35}out(orgout, (okName,okOp))
+    else
+        {36}out(orgout, (nN,nO))
+) | (
+    {37}let orgName_2: name = orgName in
+    {38}let op_3: bitstring = op in
+    {39}in(affin, (zname: name,zop: bitstring));
+    {40}if (zname = orgName_2) then
+    (
+        {41}if (zop = op_3) then
+            {42}event affReceivesMsg;
+            {43}out(affout, OK)
+        else
+            {44}out(affout, notOK)
+    )
+    else
+        {45}out(affout, notOK);
+        {46}out(pub, zname)
+)
+
+--  Process 1 (that is, process 0, with let moved downwards):
+{1}new op: bitstring;
+{2}new orgName: name;
+{3}!
+(
+    {6}event clientSendName;
+    {5}let op_1: bitstring = op in
+    {4}let clientname: name = invalidName in
+    {7}out(cout, (clientname,op_1));
+    {8}in(cin, resp: bitstring);
+    {9}event clientReceiveResponse
+) | (
+    {12}event clientSendName;
+    {11}let op_2: bitstring = op in
+    {10}let clientname_1: name = validName in
+    {13}out(cout, (clientname_1,op_2));
+    {14}in(cin, resp_1: bitstring);
+    {15}event clientReceiveResponse
+) | (
+    {17}in(cout, (xname: name,xop: bitstring));
+    {18}out(orgin, xname);
+    {19}in(orgout, (polName: name,polOp: bitstring));
+    {20}if (xname = polName) then
+    (
+        {21}if (xop = polOp) then
+        (
+            {22}event sdsdOK;
+            {16}let orgName_1: name = orgName in
+            {23}out(affin, (orgName_1,xop));
+            {24}in(affout, aresp: bitstring);
+            {25}out(cin, aresp)
+        )
+        else
+            {26}event sdsdNotOK;
+            {27}out(cin, notOK)
+    )
+    else
+        {28}event sdsdNotOK;
+        {29}out(cin, notOK)
+) | (
+    {32}in(orgin, yname: name);
+    {33}event orgAsked;
+    {30}let okName: name = validName in
+    {34}if (yname = okName) then
+    (
+        {31}let okOp: bitstring = op in
+        {35}out(orgout, (okName,okOp))
+    )
+    else
+        {36}out(orgout, (nN,nO))
+) | (
+    {39}in(affin, (zname: name,zop: bitstring));
+    {37}let orgName_2: name = orgName in
+    {40}if (zname = orgName_2) then
+    (
+        {38}let op_3: bitstring = op in
+        {41}if (zop = op_3) then
+            {42}event affReceivesMsg;
+            {43}out(affout, OK)
+        else
+            {44}out(affout, notOK)
+    )
+    else
+        {45}out(affout, notOK);
+        {46}out(pub, zname)
+)
+
+-- Query event(affReceivesMsg) ==> (event(sdsdOK) ==> event(orgAsked)) in process 1.
+Translating the process into Horn clauses...
+Completing...                                                                 
+Starting query event(affReceivesMsg) ==> (event(sdsdOK) ==> event(orgAsked))     
+goal reachable: b-event(sdsdOK) && b-event(orgAsked) -> event(affReceivesMsg)
+The 1st, 2nd hypotheses occur strictly before the conclusion.
+goal reachable: b-event(sdsdOK) && b-event(orgAsked) -> event(affReceivesMsg) && event(sdsdOK)
+The 1st, 2nd hypotheses occur strictly before the 1st conclusion.
+The 2nd hypothesis occurs strictly before the 2nd conclusion.
+RESULT event(affReceivesMsg) ==> (event(sdsdOK) ==> event(orgAsked)) is true.
+-- Query event(clientReceiveResponse) ==> event(clientSendName) in process 1.
+Translating the process into Horn clauses...
+Completing...                                                                 
+Starting query event(clientReceiveResponse) ==> event(clientSendName)            
+goal reachable: b-event(clientSendName) -> event(clientReceiveResponse)      
+RESULT event(clientReceiveResponse) ==> event(clientSendName) is true.
+-- Query not attacker(validName[]) in process 1.
+Translating the process into Horn clauses...
+Completing...                                                                 
+Starting query not attacker(validName[])                                         
+RESULT not attacker(validName[]) is true.                                    
+-- Query not attacker(invalidName[]) in process 1.
+Translating the process into Horn clauses...
+Completing...                                                                 
+Starting query not attacker(invalidName[])                                       
+RESULT not attacker(invalidName[]) is true.                                  
+
+--------------------------------------------------------------
+Verification summary:
+
+Query event(affReceivesMsg) ==> (event(sdsdOK) ==> event(orgAsked)) is true.
+
+Query event(clientReceiveResponse) ==> event(clientSendName) is true.
+
+Query not attacker(validName[]) is true.
+
+Query not attacker(invalidName[]) is true.
+
+--------------------------------------------------------------
