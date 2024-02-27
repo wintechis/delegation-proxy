@@ -1,6 +1,4 @@
 (*assumes private as protected by Solid-OIDC*)
-free cout: channel [private] . (* out client, in sdsd  *)
-free cin: channel [private] . (* in client, out sdsd  *)
 free orgin: channel [private] .  (* out proxy, in org  *)
 free orgout: channel [private] .  (* in  proxy, out org  *)
 free affin: channel [private] .  (* out proxy, in affiliate  *)
@@ -20,15 +18,12 @@ free invalidName: name [private] . (* a client name which is NOT authorized to p
 event clientSendName . (* event emitted if client sends name and op *)
 event clientReceiveResponse . (* event emitted after client receives a response  *)
 
-event sdsdNotOK . (* event emitted if sdsd does not find valid policy  *)
-event sdsdOK . (* event emitted if sdsd finds valid policy  *)
-
 event orgAsked . (* event emitted when org receives a message to return policy  *)
 
 event affReceivesMsg . (* event emitted if affiliate accepts org name of sdsd  *)
 
 (* Goal 1: When client sends a message to affiliate via the proxy, the org has to have seen the message before forwarding *)
-query event(affReceivesMsg) ==> (event(sdsdOK) ==> event(orgAsked)).
+query event(affReceivesMsg) ==>  event(orgAsked).
 
 (* Goal 2: Whenever client sends a request, it will receive a response *)
 query event(clientReceiveResponse) ==> event(clientSendName) . 
@@ -40,39 +35,25 @@ query attacker(invalidName) .
 (*===Client that wants to perform an operation op===*)
 let client(clientname : name, op : bitstring) = 
   event clientSendName ;
-  out(cout, (clientname, op));
-  in(cin, resp : bitstring);
+  out(affin, (clientname, op));
+  in(affout, resp : bitstring);
   event clientReceiveResponse . 
-
-(*===SDS-D who has to check and forward operation op===*)
-let sdsd(orgName : name) =
-  in(cout, (xname : name , xop : bitstring)) ;
-  out(orgin, xname ) ; (* send name to org to answer with policy  *)
-  in(orgout, (polName:name, polOp:bitstring)) ;
-  if xname = polName then 
-	(if xop = polOp then (
-		event sdsdOK; out(affin, (orgName, xop)); in(affout, aresp:bitstring); out(cin, aresp) 
-			) 
-	  else (
-		event sdsdNotOK; out(cin, notOK) 
-	       ) 
-	)
-  else (event sdsdNotOK; out(cin, notOK)) .
 
 (*===Organization to return policy===*)
 let organization(okName : name, okOp : bitstring) =
-  in(orgin, yname : name ) ;
   event orgAsked ;
-  if yname = okName then ( out(orgout, (okName, okOp)  ) )  else ( out(orgout, (nN, nO) ) ) .
+  out(orgout, okName) .
+  (* if yname = okName then ( out(orgout, (okName, okOp)  ) )  else ( out(orgout, (nN, nO) ) ) . *)
 
 (*===Affiliate to whom the operation is fowarded to===*)
 let affiliate(orgName: name, op: bitstring)  =
+  in(orgout, delname : name ); (* missing: check if orgName is valid... *)
   in(affin, (zname : name, zop : bitstring)) ;
-  out(pub,zname) ; (* publish received name to check if affiliate ever received secret client name*)
-  if zname = orgName then ( if zop = op then ( event affReceivesMsg ;  out(affout,OK)) else out(affout, notOK) ) else out(affout, notOK) .
+  out(pub, zname) ; (* publish received name to check if affiliate ever received secret client name*)
+  if zname = delname then ( if zop = op then ( event affReceivesMsg ;  out(affout,OK)) else out(affout, notOK) ) else  out( affout, notOK )  .
 
 process
   new op: bitstring; (*the operation to be applied to the affiliate*)
-  new orgName: name; (* the organization's name and the name the SDS-D uses*)
-  (* one client is initalized with a valid name and the operation, one client with an invalid name, SDS-D knows the organization name, organization knows which client is allowed to perform what operation, the affiliation knows the organization  *)
-  !(client(invalidName, op) | client(validName, op) | sdsd(orgName) | organization(validName , op) | affiliate(orgName, op))
+  new orgName: name; (* the organization's name *)
+  (* one client is initalized with a valid name and the operation, one client with an invalid name, organization knows which client is allowed to perform what operation, the affiliation is initialized with the valid name  *)
+  !(client(invalidName, op) | client(validName, op) |  organization(validName , op) | affiliate(orgName, op))
