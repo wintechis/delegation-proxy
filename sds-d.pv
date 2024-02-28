@@ -23,17 +23,17 @@ event clientReceiveResponse . (* event emitted after client receives a response 
 event sdsdNotOK . (* event emitted if sdsd does not find valid policy  *)
 event sdsdOK . (* event emitted if sdsd finds valid policy  *)
 
-event orgAsked . (* event emitted when org receives a message to return policy  *)
+event orgOK . (* event emitted when org receives a message to return policy  *)
 
 event affReceivesMsg . (* event emitted if affiliate accepts org name of sdsd  *)
 
-(* Goal 1: When client sends a message to affiliate via the proxy, the org has to have seen the message before forwarding *)
-query event(affReceivesMsg) ==> (event(sdsdOK) ==> event(orgAsked)).
+(* Goal 2: When client sends a message to affiliate via the proxy, the org has to have seen the message before forwarding *)
+query inj-event(affReceivesMsg) ==> inj-event(orgOK).
 
-(* Goal 2: Whenever client sends a request, it will receive a response *)
+(* Goal 3 Whenever client sends a request, it will receive a response *)
 query event(clientReceiveResponse) ==> event(clientSendName) . 
 
-(* Goal 3: The affiliate will never get to known a client's name from the SDS-D regardless of whether the name is valid or invalid *)
+(* Goal 1: The affiliate will never get to known a client's name from the SDS-D regardless of whether the name is valid or invalid *)
 query attacker(validName) .
 query attacker(invalidName) .
 
@@ -62,7 +62,7 @@ let sdsd(orgName : name) =
 (*===Organization to return policy===*)
 let organization(okName : name, okOp : bitstring) =
   in(orgin, yname : name ) ;
-  event orgAsked ;
+  event orgOK ;
   if yname = okName then ( out(orgout, (okName, okOp)  ) )  else ( out(orgout, (nN, nO) ) ) .
 
 (*===Affiliate to whom the operation is fowarded to===*)

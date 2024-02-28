@@ -18,17 +18,17 @@ free invalidName: name [private] . (* a client name which is NOT authorized to p
 event clientSendName . (* event emitted if client sends name and op *)
 event clientReceiveResponse . (* event emitted after client receives a response  *)
 
-event orgAsked . (* event emitted when org receives a message to return policy  *)
+event orgOK . (* event emitted when org receives a message to return policy  *)
 
 event affReceivesMsg . (* event emitted if affiliate accepts org name of sdsd  *)
 
-(* Goal 1: When client sends a message to affiliate via the proxy, the org has to have seen the message before forwarding *)
-query event(affReceivesMsg) ==>  event(orgAsked).
+(* Goal 2: When client sends a message to affiliate via the proxy, the org has to have seen the message before forwarding *)
+query inj-event(affReceivesMsg) ==>  inj-event(orgOK).
 
-(* Goal 2: Whenever client sends a request, it will receive a response *)
+(* Goal 3: Whenever client sends a request, it will receive a response *)
 query event(clientReceiveResponse) ==> event(clientSendName) . 
 
-(* Goal 3: The affiliate will never get to known a client's name from the SDS-D regardless of whether the name is valid or invalid *)
+(* Goal 1: The affiliate will never get to known a client's name from the SDS-D regardless of whether the name is valid or invalid *)
 query attacker(validName) .
 query attacker(invalidName) .
 
@@ -41,7 +41,7 @@ let client(clientname : name, op : bitstring) =
 
 (*===Organization to return policy===*)
 let organization(okName : name, okOp : bitstring) =
-  event orgAsked ;
+  event orgOK ;
   out(orgout, okName) .
   (* if yname = okName then ( out(orgout, (okName, okOp)  ) )  else ( out(orgout, (nN, nO) ) ) . *)
 
