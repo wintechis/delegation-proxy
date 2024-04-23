@@ -1,7 +1,6 @@
 (*assumes private as protected by Solid-OIDC*)
-free orgin: channel [private] .  (* out proxy, in org  *)
-free orgout: channel [private] .  (* in  proxy, out org  *)
-free affin: channel [private] .  (* out proxy, in affiliate  *)
+free orgout: channel [private] .  (* in affiliate, out org  *)
+free affin: channel [private] .  (* out client, in affiliate  *)
 free affout: channel [private] .  (* in proxy, out affiliate  *)
 free pub: channel .  (* public channel  *)
 
@@ -14,23 +13,22 @@ free nO : bitstring . (* to indicate no policy for operation found *)
 free validName: name [private] . (* a client name which is authorized to perform operations *)
 free invalidName: name [private] . (* a client name which is NOT authorized to perform any operation *)
 
-
 event clientSendName . (* event emitted if client sends name and op *)
 event clientReceiveResponse . (* event emitted after client receives a response  *)
 
 event orgOK . (* event emitted when org receives a message to return policy  *)
 
-event affReceivesMsg . (* event emitted if affiliate accepts org name of sdsd  *)
+event affReceivesMsg . (* event emitted if affiliate accepts a message *)
+
+(* Goal 1: The affiliate will never get to known a client's name redardless of whether the name is valid or invalid *)
+query attacker(validName) .
+query attacker(invalidName) .
 
 (* Goal 2: When client sends a message to affiliate via the proxy, the org has to have seen the message before forwarding *)
-query inj-event(affReceivesMsg) ==>  inj-event(orgOK).
+query event(affReceivesMsg) ==>  event(orgOK).
 
 (* Goal 3: Whenever client sends a request, it will receive a response *)
 query event(clientReceiveResponse) ==> event(clientSendName) . 
-
-(* Goal 1: The affiliate will never get to known a client's name from the SDS-D regardless of whether the name is valid or invalid *)
-query attacker(validName) .
-query attacker(invalidName) .
 
 (*===Client that wants to perform an operation op===*)
 let client(clientname : name, op : bitstring) = 
@@ -47,7 +45,7 @@ let organization(okName : name, okOp : bitstring) =
 
 (*===Affiliate to whom the operation is fowarded to===*)
 let affiliate(orgName: name, op: bitstring)  =
-  in(orgout, delname : name ); (* missing: check if orgName is valid... *)
+  in(orgout, delname : name ); 
   in(affin, (zname : name, zop : bitstring)) ;
   out(pub, zname) ; (* publish received name to check if affiliate ever received secret client name*)
   if zname = delname then ( if zop = op then ( event affReceivesMsg ;  out(affout,OK)) else out(affout, notOK) ) else  out( affout, notOK )  .
@@ -56,4 +54,4 @@ process
   new op: bitstring; (*the operation to be applied to the affiliate*)
   new orgName: name; (* the organization's name *)
   (* one client is initalized with a valid name and the operation, one client with an invalid name, organization knows which client is allowed to perform what operation, the affiliation is initialized with the valid name  *)
-  !(client(invalidName, op) | client(validName, op) |  organization(validName , op) | affiliate(orgName, op))
+  (!client(invalidName, op) | !client(validName, op) |  !organization(validName , op) | !affiliate(orgName, op))

@@ -1,0 +1,113 @@
+(*assumes private as protected by Solid-OIDC*)
+free cout:channel [private] . (* out client, in RDP  *)
+free cin:channel [private] . (* in client, out RDP  *)
+free orgin:channel [private] .  (* out proxy, in org  *)
+free orgout:channel [private] .  (* in  proxy, out org  *)
+free affin:channel [private] .  (* out proxy, in affiliate  *)
+free affout:channel [private] .  (* in proxy, out affiliate  *)
+free pub:channel .  (* public channel  *)
+
+type Name.
+
+free OK:bitstring.
+free notOK:bitstring.
+free nN:Name . (* to indicate no policy for Name found *)
+free nO:bitstring . (* to indicate no policy for operation found *)
+free validName:Name [private] . (* a client Name which is authorized to perform operations *)
+free invalidName:Name [private] . (* a client Name which is NOT authorized to perform any operation *)
+
+event clientSendName(bitstring) . (* event emitted if client sends Name and op *)
+event clientReceiveResponse(bitstring) . (* event emitted after client receives a response  *)
+(* event clientCompletes .  event emitted after client receives a response  *)
+
+event orgOK(bitstring) . (* event emitted when org receives a message to return policy  *)
+
+event affReceivesMsg(bitstring) . (* event emitted if affiliate accepts a message *)
+
+event rdpWasSuccessful(bitstring) . (* event emitted if rdp receives an answer for orgOK request from affiliate *)
+
+
+(* Goal 1: The affiliate will never get to known a client's Name from the RDP regardless of whether the Name is valid or invalid *)
+query attacker(validName) .
+query attacker(invalidName) .
+
+(* Goal 2: When client sends a message to affiliate via the proxy, the org has to have seen the message before forwarding *)
+query nonce:bitstring; event(clientReceiveResponse(nonce)) ==> inj-event(orgOK(nonce)).
+
+(* fullchain *)
+query nonce:bitstring; 
+  event(clientReceiveResponse(nonce))
+  ==> 
+  inj-event(rdpWasSuccessful(nonce))
+  && 
+  inj-event(orgOK(nonce))
+  && 
+  inj-event(affReceivesMsg(nonce)).
+
+(* Goal 3: Whenever client sends a request, it will receive a response *)
+query nonce:bitstring; event(clientReceiveResponse(nonce)) ==> inj-event(clientSendName(nonce)) . 
+
+
+(*===Client that wants to perform an operation op===*)
+let client(clientname:Name, op:bitstring) = 
+  new nonce:bitstring; (*session id*)
+  (*  *)
+  let m0 = (clientname, op, nonce) in
+  event clientSendName(nonce) ;
+  out(cout, m0);
+  (*  *)
+  in(cin, m4:bitstring) ;
+  let (resp:bitstring,nonce2:bitstring) = m4 in
+  if nonce = nonce2 then (*! these nonce checks are required in order to be able to prove inj-event query ! *)
+  (* if you did not check the nonces, ProVerif is not able to prove correspondence correctly *)
+  event clientReceiveResponse(nonce)  . 
+
+(*===RDP who checks and forwards operation op===*)
+let rdp(orgName:Name) =
+  in(cout, m0:bitstring) ;
+  let (xname:Name , xop:bitstring, nonce:bitstring) = m0 in
+  let m1 = (xname, nonce) in
+  out(orgin, m1) ; (* send Name to org to get answer with policy details *)
+  (*  *)
+  in(orgout, m2:bitstring) ;
+  let (polName:Name, polOp:bitstring, nonce2:bitstring) = m2 in
+  if (xname, xop, nonce) = (polName, polOp, nonce2) then (*! these nonce checks are required in order to be able to prove inj-event query ! *)
+  let m3 = (orgName, xop, nonce) in
+  out(affin, m3 ); 
+  (*  *)
+  in(affout, m4:bitstring); (* proxy response*)
+  let (resp:bitstring,nonce3:bitstring) = m4 in
+  if nonce = nonce3 then (*! these nonce checks are required in order to be able to prove inj-event query ! *)
+  event rdpWasSuccessful(nonce);
+  out(cin, m4) .
+
+(*===Organization to return policy===*)
+let organization(okName:Name, okOp:bitstring) =
+  in(orgin, m1:bitstring ) ;
+  let (yname:Name, nonce:bitstring) = m1 in
+  if yname = okName then 
+  event orgOK(nonce) ;
+  let m2 = (okName, okOp, nonce) in 
+  out(orgout, m2) .
+
+(*===Affiliate to whom the operation is fowarded to===*)
+let affiliate(orgName:Name, op:bitstring)  =
+  in(affin, m3:bitstring) ;
+  let (zname:Name, zop:bitstring, nonce:bitstring) = m3 in
+  if (zname, zop) = (orgName, op) then
+  event affReceivesMsg(nonce) ;   
+  let m4 = (OK,nonce) in 
+  out(affout,m4) ;
+  out(pub,zname) . (* publish received Name to check if affiliate ever received secret client Name*)
+
+process
+  new op:bitstring; (*the operation to be applied to the affiliate*)
+  new orgName:Name; (* the organization's Name and the Name the RDP uses*)
+  (* one client is initalized with a valid Name and the operation, one client with an invalid Name, RDP knows the organization Name, organization knows which client is allowed to perform what operation, the affiliation knows the organization  *)
+  (
+      !client(invalidName, op) 
+    | !client(validName, op) 
+    | !rdp(orgName) 
+    | !organization(validName , op) 
+    | !affiliate(orgName, op)
+  )
